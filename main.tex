@@ -1,0 +1,241 @@
+\documentclass[12pt,a4paper,oneside,sumario=abnt-6027-2012,chapter=TITLE]{UFVJM-abntex2}
+
+% ─── Pacotes ────────────────────────────────────────────────────────────────
+\usepackage[brazil]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx}
+\usepackage{lastpage}
+\usepackage{indentfirst}
+\usepackage{color}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{multicol}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{caption}
+\usepackage{subfig}
+\usepackage{ragged2e}
+\usepackage{textcomp}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usepackage{tikz-uml}
+\usepackage{epstopdf}
+\usepackage[alf,abnt-etal-cite=3,abnt-etal-list=0,abnt-etal-text=emph,abnt-emphasize=bf,bibjustif]{abntex2cite}
+
+\setlist[itemize,enumerate]{nosep}
+\raggedbottom
+\widowpenalty=10000
+\clubpenalty=10000
+\setlength{\parindent}{2cm}
+
+\captionsetup{font={bf,small}, position=below}
+\renewcommand{\fonte}[1]{\captionsetup{justification=raggedright,singlelinecheck=false}\legend{\textnormal{Fonte: #1}}}
+
+% ─── Estilo de código ────────────────────────────────────────────────────────
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny,
+  keywordstyle=\color{blue}\bfseries,
+  commentstyle=\color{gray},
+  stringstyle=\color{teal},
+  inputencoding=utf8,
+  extendedchars=true,
+  literate={ã}{{\~a}}1 {ê}{{\^e}}1 {é}{{\'e}}1 {ç}{{\c{c}}}1 {ã}{{\~a}}1 {õ}{{\~o}}1,
+}
+
+% ─── Metadados ───────────────────────────────────────────────────────────────
+\titulo{DESENVOLVIMENTO DE UMA PLATAFORMA WEB PARA ANÁLISE\\
+        INTEGRADA DE MICOBIOMA E METATAXONÔMICA}
+\autor{Murilo Santiago Escobedo}
+\local{Diamantina}
+\data{2026}
+\orientador{Eduardo Pelli}       % sem "Prof." — a cls adiciona
+\unidade{Departamento de Computação}
+\tipotrabalho{Trabalho de Conclusão de Curso}
+\preambulo{Trabalho de Conclusão de Curso apresentado ao curso de
+Bacharelado em Sistemas de Informação da Universidade Federal dos
+Vales do Jequitinhonha e Mucuri, como requisito parcial para
+obtenção do título de Bacharel em Sistemas de Informação.}
+
+\hypersetup{
+  pdftitle={\@title},
+  pdfauthor={\@author},
+  pdfsubject={\imprimirpreambulo},
+  pdfkeywords={bioinformática}{micobioma}{metataxonômica}{plataforma web}{FastAPI}{R},
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  filecolor=magenta,
+  urlcolor=blue,
+  bookmarksdepth=4
+}
+\makeindex
+
+% ─── Capa com logo UFVJM ─────────────────────────────────────────────────────
+\renewcommand{\imprimircapa}{%
+  \begin{capa}
+    \center
+    \includegraphics[width=4cm]{images.png}\\[0.4cm]
+    {\normalsize\bfseries UNIVERSIDADE FEDERAL DOS VALES DO JEQUITINHONHA E MUCURI}\\[0.1cm]
+    {\normalsize\bfseries \imprimirunidade}\\[0.3cm]
+    {\normalsize\bfseries \imprimirautor}
+    \vfill
+    \begin{center}
+      {\normalsize\bfseries\MakeTextUppercase{\imprimirtitulo}}
+    \end{center}
+    \vfill
+    {\normalsize\bfseries \imprimirlocal}\\
+    {\normalsize\bfseries \imprimirdata}
+    \vspace*{1cm}
+  \end{capa}
+}
+
+% ─── Documento ───────────────────────────────────────────────────────────────
+\begin{document}
+\frenchspacing
+
+\imprimircapa
+\imprimirfolhaderosto
+
+% ── Folha de aprovação ──────────────────────────────────────────────────────
+\begin{folhadeaprovacao}
+  \begin{center}
+    {\bfseries \imprimirautor}
+    \vspace{1.5cm}
+    \begin{center}
+      \bfseries \imprimirtitulo
+    \end{center}
+    \vspace*{\fill}
+    \hspace{.45\textwidth}
+    \begin{minipage}{.5\textwidth}
+      \imprimirpreambulo\\[0.5cm]
+      Orientador: Prof. Dr. \imprimirorientador\\ % Eduardo Pelli — Depto. de Computação UFVJM
+      Data de aprovação: \_\_\_\_/\_\_\_\_/\_\_\_\_.
+    \end{minipage}
+    \vspace*{\fill}
+  \end{center}
+  \assinatura{Prof. Dr. \imprimirorientador \\ Departamento de Computação -- UFVJM}
+  \assinatura{Prof. Dr. \\ Universidade Federal dos Vales do Jequitinhonha e Mucuri}
+  \assinatura{Prof. Dr. \\ Universidade Federal dos Vales do Jequitinhonha e Mucuri}
+  \begin{center}
+    \vspace*{0.5cm}
+    {\textbf{\imprimirlocal}}
+  \end{center}
+\end{folhadeaprovacao}
+
+% ── Dedicatória ─────────────────────────────────────────────────────────────
+\begin{dedicatoria}
+\vspace*{\fill}
+\begin{flushright}
+  \textit{% TODO: escrever dedicatória
+  À minha família, pelo apoio incondicional.}
+\end{flushright}
+\end{dedicatoria}
+
+% ── Agradecimentos ──────────────────────────────────────────────────────────
+\begin{agradecimentos}
+
+Ao Prof. Dr. Eduardo Pelli, pela orientação, confiança e pela abertura para
+desenvolver um trabalho que cruza fronteiras entre a computação e as ciências
+biológicas. Sua disponibilidade e direcionamento foram determinantes para as
+decisões arquiteturais que tornaram este projeto viável.
+
+A Guilherme Henrique Fernandes Carneiro, mestrando em Produção Vegetal pela
+Universidade Federal dos Vales do Jequitinhonha e Mucuri, parceiro fundamental
+no desenvolvimento deste trabalho. Foi por meio da colaboração com Guilherme
+que os requisitos científicos da plataforma ganharam forma concreta: as
+análises implementadas, os formatos de dados adotados e os três projetos
+científicos suportados --- INOVAHERB, Pós-Fogo e Biorremediação --- refletem
+diretamente o conhecimento que ele trouxe da biologia para o desenvolvimento
+do sistema.
+
+Ao \textbf{NEBIM} --- Núcleo de Estudos em Biotecnologia, Inovações e
+Melhoramento de Plantas da UFVJM, localizado no Campus JK em Diamantina,
+pela oportunidade de desenvolver este trabalho inserido em um contexto de
+pesquisa real. A convivência com o grupo, vinculado ao Departamento de
+Agronomia e ao Laboratório de Genética Molecular e Melhoramento de Plantas
+e Animais (LGMMPA), foi essencial para compreender as demandas concretas dos
+pesquisadores e traduzir necessidades científicas em requisitos de software.
+
+À Universidade Federal dos Vales do Jequitinhonha e Mucuri, pela formação
+oferecida ao longo do curso de Sistemas de Informação.
+
+\end{agradecimentos}
+
+% ── Resumo / Abstract ───────────────────────────────────────────────────────
+\input{Resumo}
+\cleardoublepage
+
+\input{Abstract}
+\cleardoublepage
+
+% ── Listas ──────────────────────────────────────────────────────────────────
+\pdfbookmark[0]{\listfigurename}{lof}
+\listoffigures*
+\cleardoublepage
+
+\pdfbookmark[0]{\listtablename}{lot}
+\listoftables*
+\cleardoublepage
+
+\begin{siglas}
+  \item[ABNT]  Associação Brasileira de Normas Técnicas
+  \item[ANCOM-BC2] Analysis of Compositions of Microbiomes with Bias Correction 2
+  \item[API]   Application Programming Interface
+  \item[CQRS]  Command Query Responsibility Segregation
+  \item[DEG]   Differentially Expressed Gene
+  \item[ES]    Elasticsearch
+  \item[FASTQ] Formato de arquivo de sequenciamento de nucleotídeos com qualidade
+  \item[GSEA]  Gene Set Enrichment Analysis
+  \item[HTTP]  HyperText Transfer Protocol
+  \item[ITS]   Internal Transcribed Spacer
+  \item[JWT]   JSON Web Token
+  \item[k3s]   Distribuição leve de Kubernetes
+  \item[MaAsLin2] Multivariable Association with Linear Models 2
+  \item[MinIO] Object storage compatível com S3
+  \item[OTU]   Operational Taxonomic Unit
+  \item[PCoA]  Principal Coordinates Analysis
+  \item[PG]    PostgreSQL
+  \item[QC]    Quality Control
+  \item[QIIME2] Quantitative Insights Into Microbial Ecology 2
+  \item[rds]   Formato binário de objeto R (R Data Serialization)
+  \item[REST]  Representational State Transfer
+  \item[S3]    Simple Storage Service
+  \item[SWR]   Stale-While-Revalidate
+  \item[TCC]   Trabalho de Conclusão de Curso
+  \item[UFVJM] Universidade Federal dos Vales do Jequitinhonha e Mucuri
+  \item[UI]    User Interface
+  \item[URL]   Uniform Resource Locator
+  \item[UUID]  Universally Unique Identifier
+  \item[WS]    WebSocket
+\end{siglas}
+
+\tableofcontents*
+\newpage
+
+% ─── Texto ───────────────────────────────────────────────────────────────────
+\textual
+\pagestyle{simple}
+
+\input{Introducao}
+\input{RevisaoLiteratura}
+\input{MateriaisEMetodos}
+\input{Stack}
+\input{Diagramas}
+\input{Resultados}
+\input{Conclusao}
+
+% ─── Referências ─────────────────────────────────────────────────────────────
+\bibliography{bibliografia}
+
+\end{document}

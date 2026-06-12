@@ -1,0 +1,102 @@
+\chapter{Introdução}
+\label{cap:introducao}
+
+O sequenciamento de nova geração (NGS) revolucionou o estudo de
+comunidades microbianas ao tornar viável a análise de milhões de
+sequências de DNA em uma única corrida. Projetos científicos que antes
+exigiam anos de cultivo laboratorial podem hoje ser conduzidos em
+semanas, desde que haja infraestrutura computacional adequada para
+processar e interpretar o volume de dados gerado. Nesse contexto,
+pesquisadores da Universidade Federal dos Vales do Jequitinhonha e
+Mucuri (UFVJM) conduzem três investigações paralelas sobre comunidades
+microbianas do solo: o projeto \textbf{INOVAHERB}, voltado à
+caracterização do micobioma de plantas medicinais por meio de
+sequenciamento ITS; o projeto \textbf{Pós-Fogo}, que monitora a
+recuperação da microbiota bacteriana (16S rRNA) após eventos de
+queimada; e o projeto \textbf{Biorremediação}, que correlaciona
+comunidades fúngicas e bacterianas com variáveis edáficas em solos
+contaminados por metais pesados.
+
+Embora os três projetos compartilhem metodologia de sequenciamento e
+análise estatística semelhantes, cada equipe utilizava ferramentas
+distintas, scripts R isolados e fluxos de trabalho não padronizados.
+A ausência de uma plataforma centralizada resultava em retrabalho,
+dificuldade de reprodutibilidade e barreiras de acesso para membros da
+equipe sem experiência em programação. Este trabalho surge como
+resposta direta a esse problema: o desenvolvimento de uma plataforma
+web acadêmica — denominada \textit{Rizoma} — capaz de integrar
+o processamento de sequências FASTQ, a execução automática de análises
+estatísticas em R e a visualização interativa dos resultados, tudo
+sob uma interface acessível a pesquisadores de biologia.
+
+\section{Motivação}
+
+O principal gargalo identificado no fluxo de trabalho dos três
+projetos não era a análise em si, mas a infraestrutura necessária para
+executá-la de forma repetível. Análises como \textit{Analysis of
+Compositions of Microbiomes with Bias Correction} (ANCOM-BC2)
+\cite{lin2022analysis}, \textit{Multivariable Association with Linear
+Models} (MaAsLin2) \cite{mallick2021multivariable} e redes de
+co-ocorrência via SpiecEasi \cite{kurtz2015sparse} exigem
+pré-processamento cuidadoso dos dados de abundância, parametrização
+específica por tipo de marcador molecular e integração com metadados
+ambientais das amostras. Realizá-las manualmente, sem rastreabilidade
+de parâmetros ou histórico de execução, compromete a reprodutibilidade
+científica exigida em publicações.
+
+Adicionalmente, o volume de dados — arquivos FASTQ comprimidos na
+ordem de gigabytes por projeto — inviabiliza o processamento em
+estações de trabalho locais. A escolha de uma arquitetura de
+microsserviços com orquestração Kubernetes permitiu consolidar os
+recursos computacionais disponíveis no laboratório em um cluster de
+cinco nós, distribuindo a carga de trabalho de forma eficiente.
+
+\section{Objetivos}
+
+\subsection{Objetivo Geral}
+
+Projetar, implementar e validar uma plataforma web para análise
+integrada de micobioma e metataxonômica, capaz de gerenciar o ciclo
+completo desde o upload de arquivos FASTQ até a visualização dos
+resultados estatísticos, com suporte aos três projetos científicos
+ativos na UFVJM.
+
+\subsection{Objetivos Específicos}
+
+\begin{enumerate}
+  \item Definir uma arquitetura de microsserviços adequada ao perfil
+        de carga dos análises bioinformáticas, contemplando fila de
+        jobs assíncrona, armazenamento de objetos e busca analítica.
+
+  \item Implementar um R Worker capaz de executar as análises
+        DESeq2, ANCOM-BC2, MaAsLin2, SpiecEasi, Random Forest, GSEA,
+        FUNGuild e PICRUSt2 a partir de artefatos phyloseq armazenados
+        em objeto-storage.
+
+  \item Desenvolver uma API REST no padrão CQRS com FastAPI, expondo
+        endpoints para gerenciamento de projetos, amostras, jobs e
+        resultados.
+
+  \item Construir um frontend Next.js 14 com visualizações interativas
+        (PCoA, volcano plot, redes microbianas) conectadas em tempo
+        real via WebSocket.
+
+  \item Implantar a solução em cluster Kubernetes (k3s) com
+        autenticação institucional Google OAuth.
+
+  \item Gerar o painel unificado de seis PCoAs — figura central do
+        TCC — ao término dos três pipelines.
+\end{enumerate}
+
+\section{Estrutura do Trabalho}
+
+O restante deste texto está organizado da seguinte forma. O
+Capítulo~\ref{cap:revisao} apresenta a revisão bibliográfica sobre
+análise de microbiomas, ferramentas bioinformáticas e padrões
+arquiteturais adotados. O Capítulo~\ref{cap:metodos} descreve a
+metodologia de desenvolvimento, as decisões de arquitetura e os
+detalhes de implementação de cada componente. O
+Capítulo~\ref{cap:resultados} apresenta os resultados obtidos,
+incluindo métricas de desempenho dos pipelines e as visualizações
+geradas. Por fim, o Capítulo~\ref{cap:conclusao} reúne as conclusões,
+limitações identificadas e trabalhos futuros.

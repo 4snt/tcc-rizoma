@@ -1,0 +1,180 @@
+\chapter{Revisão Bibliográfica}
+\label{cap:revisao}
+
+\section{Microbioma e Metataxonômica}
+
+O microbioma é definido como o conjunto de microrganismos — bactérias,
+fungos, arqueas e vírus — que habitam um determinado ambiente,
+juntamente com seus elementos genômicos e as condições
+bióticas e abióticas que os envolvem \cite{berg2020microbiome}.
+A metataxonômica, ramo da metagenômica, utiliza marcadores moleculares
+conservados para identificar e quantificar esses microrganismos a
+partir de amostras ambientais, sem necessidade de cultivo
+\cite{knight2018best}.
+
+Para bactérias, o marcador mais amplamente utilizado é o gene 16S
+rRNA, cujas regiões hipervariáveis (V3--V4) permitem discriminar
+gêneros e espécies com boa resolução taxonômica
+\cite{johnson2019evaluation}. Para fungos, o espaçador interno
+transcrito (ITS1/ITS2) da região ribossomal é o marcador recomendado
+pela \textit{Fungal Barcoding Consortium}, pois apresenta variação
+suficiente para separar espécies dentro de um mesmo gênero
+\cite{schoch2012nuclear}.
+
+\subsection{Pipeline QIIME2}
+
+O \textit{Quantitative Insights Into Microbial Ecology 2} (QIIME2) é
+atualmente o pipeline bioinformático mais adotado para análise
+metataxonômica \cite{bolyen2019reproducible}. O fluxo de trabalho
+compreende: importação dos arquivos FASTQ, controle de qualidade e
+truncamento das leituras via DADA2 \cite{callahan2016dada2},
+classificação taxonômica por Naive Bayes treinado em bases de referência
+(SILVA 138 para 16S \cite{quast2012silva}; UNITE v10 para ITS
+\cite{nilsson2019unite}), e exportação de tabelas de frequência OTU/ASV
+no formato \texttt{phyloseq} \cite{mcmurdie2013phyloseq}.
+
+O objeto \texttt{phyloseq} serializado (\texttt{.rds}) tornou-se o
+formato padrão de entrada para a maioria das análises estatísticas
+downstream implementadas na \textit{Rizoma}.
+
+\subsection{Análises Estatísticas de Microbioma}
+
+\subsubsection{ANCOM-BC2}
+
+O ANCOM-BC2 (\textit{Analysis of Compositions of Microbiomes with
+Bias Correction 2}) é um método robusto para detecção de abundâncias
+diferenciais em dados de microbioma, projetado para corrigir o viés
+de amostragem intrínseco a dados composicionais
+\cite{lin2022analysis}. É o método adotado no projeto INOVAHERB para
+comparar a composição do micobioma entre tratamentos fatoriais.
+
+\subsubsection{MaAsLin2}
+
+O MaAsLin2 (\textit{Multivariable Association with Linear Models 2})
+modela associações entre features microbianas e metadados clínicos ou
+ambientais por meio de modelos lineares generalizados, com suporte a
+dados longitudinais e covariáveis múltiplas \cite{mallick2021multivariable}.
+É empregado no projeto Pós-Fogo para identificar táxons cujas
+abundâncias se correlacionam com o tempo decorrido após a queimada e
+com variáveis edáficas mensuradas em campo.
+
+\subsubsection{DESeq2}
+
+O DESeq2 é um método bayesiano empírico originalmente desenvolvido
+para RNA-Seq \cite{love2014moderated}, mas amplamente adaptado para
+dados de microbioma após normalização por tamanho de biblioteca. Estima
+a dispersão por gene e aplica \textit{shrinkage} nos log-fold changes
+para maior estabilidade em estudos com poucas réplicas.
+
+\subsubsection{SpiecEasi}
+
+O SpiecEasi (\textit{Sparse InversE Covariance estimation for
+Ecological Association Inference}) infere redes de co-ocorrência de
+táxons a partir de estimativa esparsa de matrizes de covariância inversa
+\cite{kurtz2015sparse}. Os nós da rede representam táxons e as arestas
+representam correlações parciais, fornecendo uma representação mais
+fiel das interações ecológicas do que correlações de Pearson ou
+Spearman sobre dados composicionais.
+
+\subsubsection{FUNGuild e PICRUSt2}
+
+O FUNGuild é um banco de dados de anotação funcional para fungos,
+acessível via API HTTP, que associa OTUs/ASVs a guildas ecológicas
+(parasitas, simbiontes, saprófitas) \cite{nguyen2016funguild}. O
+PICRUSt2 (\textit{Phylogenetic Investigation of Communities by
+Reconstruction of Unobserved States 2}) realiza predição funcional
+metagenômica a partir de dados 16S, estimando abundâncias de vias
+metabólicas sem necessidade de sequenciamento metagenômico completo
+\cite{douglas2020picrust2}.
+
+\section{Arquiteturas para Plataformas Bioinformáticas}
+
+\subsection{Microsserviços e Orquestração de Containers}
+
+A abordagem de microsserviços decompõe uma aplicação em serviços
+independentes, cada um com responsabilidade bem definida e
+implantável de forma autônoma \cite{fowler2014microservices}. Para
+plataformas científicas, essa arquitetura apresenta vantagens
+significativas: permite escalar seletivamente os componentes mais
+intensivos (como o worker de análises R), facilita a substituição de
+implementações e isola falhas de modo a não comprometer o restante do
+sistema.
+
+O Kubernetes tornou-se o padrão de fato para orquestração de
+containers em ambientes científicos \cite{kubernetes2022}. O k3s é
+uma distribuição certificada e leve do Kubernetes, adequada a clusters
+\textit{on-premises} com hardware limitado, como o servidor de cinco
+nós AMD utilizado neste projeto.
+
+\subsection{Filas de Jobs e Processamento Assíncrono}
+
+A maioria das plataformas bioinformáticas utiliza sistemas de fila de
+mensagens dedicados — como RabbitMQ, Apache Kafka ou Redis Streams —
+para desacoplar a submissão de jobs de sua execução. Entretanto,
+para cargas com dezenas a centenas de jobs diários, o PostgreSQL
+oferece mecanismo equivalente via \texttt{LISTEN/NOTIFY} combinado
+com \texttt{SELECT ... FOR UPDATE SKIP LOCKED}
+\cite{brandl2021postgresql}, eliminando a necessidade de um serviço
+adicional e simplificando a operação e a observabilidade.
+
+\subsection{Armazenamento de Objetos e Dados}
+
+O armazenamento de artefatos binários volumosos (arquivos FASTQ,
+objetos R serializados, relatórios) requer atenção especial em
+plataformas bioinformáticas. Uma alternativa ao uso de sistemas de
+\textit{object storage} externos (como MinIO ou Amazon S3) é o
+mecanismo nativo de \textit{Large Objects} do PostgreSQL, que permite
+armazenar dados binários arbitrários referenciados por OIDs
+(\textit{Object Identifiers}) e acessados via interface de
+\textit{streaming} transacional \cite{postgresql2023docs}. Essa
+abordagem centraliza backup, replicação e controle de acesso em um
+único serviço, reduzindo a superfície operacional do cluster.
+
+\subsection{CQRS e Event Sourcing em APIs Científicas}
+
+O padrão \textit{Command Query Responsibility Segregation} (CQRS)
+separa operações de escrita (comandos) das de leitura (consultas),
+permitindo otimizar cada caminho de forma independente
+\cite{young2010cqrs}. Em plataformas bioinformáticas, isso se traduz
+em comandos transacionais gravados no PostgreSQL (enfileiramento de
+jobs, confirmação de upload) e consultas de leitura rápida servidas
+pelo Elasticsearch, que mantém índices otimizados para agregações e
+buscas textuais sobre resultados analíticos.
+
+\section{Visualização de Dados de Microbioma}
+
+\subsection{Análise de Coordenadas Principais (PCoA)}
+
+A PCoA é a técnica de ordenação mais empregada para representar
+visualmente a diversidade beta de comunidades microbianas
+\cite{legendre2012numerical}. A partir de uma matriz de distâncias
+(Bray-Curtis, UniFrac, Jaccard), a PCoA projeta as amostras em um
+espaço de menor dimensão que maximiza a variância explicada, permitindo
+identificar agrupamentos por tratamento, tempo ou outra variável
+experimental. Neste trabalho, seis PCoAs — duas por projeto — compõem
+o painel central do TCC.
+
+\subsection{Redes Microbianas}
+
+Redes de co-ocorrência microbiana são representadas como grafos nos
+quais nós correspondem a táxons e arestas a correlações significativas
+entre seus perfis de abundância \cite{faust2012microbial}. A
+identificação de táxons \textit{hub} — nós com alto grau de
+conectividade, também denominados táxons-chave (\textit{keystone taxa})
+— é relevante para compreender a estabilidade e a resiliência do
+ecossistema microbiano \cite{berry2014deciphering}.
+
+\section{Tecnologias de Frontend para Ciência}
+
+Plotly.js é uma biblioteca de visualização interativa amplamente
+adotada em aplicações científicas por seu suporte nativo a gráficos
+2D e 3D, exportação em alta resolução e integração com React via
+\texttt{react-plotly.js} \cite{plotly2015}. Para redes complexas,
+Cytoscape.js oferece renderização eficiente de grafos com centenas de
+nós e arestas, com suporte a layouts automáticos e interatividade
+\cite{franz2016cytoscape}.
+
+% ─── TODO: ampliar conforme evolução do texto ────────────────────────────────
+% Sugestões de seções adicionais:
+%   \section{Reprodutibilidade em Bioinformática}
+%   \section{Trabalhos Relacionados}

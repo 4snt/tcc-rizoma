@@ -1,0 +1,259 @@
+% ============================================================
+%  DIAGRAMAS UML — Rizoma
+%  Pacote: tikz-uml  (https://perso.ensta-paris.fr/~kielbasi/tikzuml/)
+%  Este arquivo é \input{} em MateriaisEMetodos.tex ou capítulo próprio
+% ============================================================
+
+% ─── Nota: mover os \begin{figure} para dentro do capítulo correto ───────────
+% Por ora estão aqui como bloco autônomo para facilitar revisão.
+
+% ============================================================
+%  DIAGRAMA 1 — Casos de Uso
+% ============================================================
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.82, transform shape]
+
+  % Sistema
+  \begin{umlsystem}[x=3.5, y=0]{Rizoma}
+
+    % Casos de uso — Pesquisador
+    \umlusecase[x=4.5, y=0,   name=login]   {Login Google OAuth}
+    \umlusecase[x=4.5, y=-2,  name=upload]  {Upload FASTQ}
+    \umlusecase[x=4.5, y=-4,  name=rds]     {Upload phyloseq .rds}
+    \umlusecase[x=4.5, y=-6,  name=enqueue] {Enfileirar análise}
+    \umlusecase[x=4.5, y=-8,  name=jobs]    {Acompanhar jobs}
+    \umlusecase[x=4.5, y=-10, name=results] {Visualizar resultados}
+    \umlusecase[x=4.5, y=-12, name=network] {Explorar rede microbiana}
+
+    % Casos de uso — Admin (adicionais)
+    \umlusecase[x=4.5, y=-14, name=newproj] {Criar projeto}
+    \umlusecase[x=4.5, y=-16, name=users]   {Gerenciar usuários}
+    \umlusecase[x=4.5, y=-18, name=invite]  {Enviar convite}
+
+  \end{umlsystem}
+
+  % Atores
+  \umlactor[x=-1.5, y=-6] {Pesquisador}
+  \umlactor[x=-1.5, y=-15]{Admin}
+
+  % Herança Admin → Pesquisador
+  \umlinherit{Admin}{Pesquisador}
+
+  % Associações Pesquisador
+  \umlassoc{Pesquisador}{login}
+  \umlassoc{Pesquisador}{upload}
+  \umlassoc{Pesquisador}{rds}
+  \umlassoc{Pesquisador}{enqueue}
+  \umlassoc{Pesquisador}{jobs}
+  \umlassoc{Pesquisador}{results}
+  \umlassoc{Pesquisador}{network}
+
+  % Associações Admin (exclusivas)
+  \umlassoc{Admin}{newproj}
+  \umlassoc{Admin}{users}
+  \umlassoc{Admin}{invite}
+
+  % Inclusões
+  \umlinclude{upload}{login}
+  \umlinclude{enqueue}{rds}
+
+\end{tikzpicture}
+\caption{Diagrama de casos de uso da \textit{Rizoma}.}
+\fonte{O autor (2026).}
+\label{fig:usecase}
+\end{figure}
+
+
+% ============================================================
+%  DIAGRAMA 2 — Sequência: Autenticação Google OAuth → JWT
+% ============================================================
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.78, transform shape]
+\begin{umlseqdiag}
+
+  \umlactor[class=Browser,   no ddots]{browser}
+  \umlobject[class=NextAuth,  no ddots]{nextauth}
+  \umlobject[class=FastAPI,   no ddots]{api}
+  \umlobject[class=Google,    no ddots]{google}
+  \umlobject[class=PostgreSQL,no ddots]{pg}
+
+  % 1. Usuário clica em "Entrar com Google"
+  \begin{umlcall}[op=signIn(), type=synchron, return=redirect OAuth]{browser}{nextauth}
+  \end{umlcall}
+
+  % 2. Callback com access token
+  \begin{umlcall}[op={POST auth/google},
+                  type=synchron, return=JWT]{nextauth}{api}
+  \end{umlcall}
+
+  % 3. Valida token com Google
+  \begin{umlcall}[op={GET userinfo},
+                  type=synchron, return={email verified}]{api}{google}
+  \end{umlcall}
+
+  % 4. Upsert usuário
+  \begin{umlcall}[op={UPSERT users},
+                  type=synchron, return={role id}]{api}{pg}
+  \end{umlcall}
+
+  % 5. Sessão NextAuth
+  \begin{umlcallself}[op={session: accessToken role}, type=synchron]{nextauth}
+  \end{umlcallself}
+
+  % 6. Redirect para dashboard
+  \begin{umlcall}[op={redirect dashboard}, type=synchron]{nextauth}{browser}
+  \end{umlcall}
+
+\end{umlseqdiag}
+\end{tikzpicture}
+\caption{Diagrama de sequência — fluxo de autenticação Google OAuth com emissão de JWT.}
+\fonte{O autor (2026).}
+\label{fig:seq_auth}
+\end{figure}
+
+
+% ============================================================
+%  DIAGRAMA 3 — Sequência: Ciclo de vida de um job
+% ============================================================
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.76, transform shape]
+\begin{umlseqdiag}
+
+  \umlactor[class=Frontend,    no ddots]{ui}
+  \umlobject[class=FastAPI,    no ddots]{api}
+  \umlobject[class=PostgreSQL, no ddots]{pg}
+  \umlobject[class=RWorker,    no ddots]{worker}
+  \umlobject[class=Elastic,    no ddots]{es}
+
+  % 1. Usuário enfileira análise
+  \begin{umlcall}[op={POST jobs enqueue},
+                  type=synchron, return={job id}]{ui}{api}
+  \end{umlcall}
+
+  % 1b. INSERT + NOTIFY
+  \begin{umlcall}[op={INSERT pipeline job},
+                  type=synchron]{api}{pg}
+  \end{umlcall}
+
+  \begin{umlcallself}[op={pg notify new job}, type=synchron]{pg}
+  \end{umlcallself}
+
+  % 2. Worker escuta NOTIFY
+  \begin{umlcall}[op={LISTEN + FOR UPDATE SKIP LOCKED},
+                  type=synchron, return=job row]{worker}{pg}
+  \end{umlcall}
+
+  % 3. Worker baixa artefato via Large Object
+  \begin{umlcall}[op={lo get phyloseq oid},
+                  type=synchron, return=rds binary]{worker}{pg}
+  \end{umlcall}
+
+  % 4. Executa análise R
+  \begin{umlcallself}[op={run analysis job type},
+                      type=synchron]{worker}
+  \end{umlcallself}
+
+  % 5. Salva resultado em PG
+  \begin{umlcall}[op={INSERT analysis results JSONB},
+                  type=synchron]{worker}{pg}
+  \end{umlcall}
+
+  % 6. Indexa no Elasticsearch
+  \begin{umlcall}[op={index document},
+                  type=synchron]{worker}{es}
+  \end{umlcall}
+
+  % 7. Marca job como done
+  \begin{umlcall}[op={UPDATE status=done},
+                  type=synchron]{worker}{pg}
+  \end{umlcall}
+
+  % 8. Frontend consulta resultado
+  \begin{umlcall}[op={GET analysis results},
+                  type=synchron, return={JSON result}]{ui}{api}
+  \end{umlcall}
+
+  \begin{umlcall}[op={SELECT analysis results},
+                  type=synchron, return=data]{api}{pg}
+  \end{umlcall}
+
+\end{umlseqdiag}
+\end{tikzpicture}
+\caption{Diagrama de sequência — ciclo de vida completo de um job de análise.}
+\fonte{O autor (2026).}
+\label{fig:seq_job}
+\end{figure}
+
+
+% ============================================================
+%  DIAGRAMA 4 — Implantação (Deployment) — cluster k3s
+% ============================================================
+\begin{figure}[p]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
+  svc/.style={
+    draw=black, rectangle, rounded corners=5pt,
+    minimum width=4.2cm, minimum height=1.4cm,
+    font=\large, align=center, line width=1pt
+  },
+  ext/.style={
+    draw=black!50, rectangle, rounded corners=5pt, dashed,
+    minimum width=4.2cm, minimum height=1.4cm,
+    font=\large, align=center
+  },
+  lbl/.style={font=\normalsize, fill=white, inner sep=2pt},
+  arr/.style={->, >=stealth, line width=1.2pt},
+  grp/.style={draw=black!60, dashed, rounded corners=8pt,
+              line width=1.2pt, inner sep=20pt}
+]
+
+% ─── Coluna esquerda: externos ────────────────────────────────
+\node[ext]               (browser)  at (-6, 5.5) {\textbf{Browser}\\\normalsize pesquisador};
+\node[ext]               (goauth)   at (-6, 2.5) {\textbf{Google OAuth}\\\normalsize externo};
+
+% ─── Linha 1 — Aplicação (y = 4) ─────────────────────────────
+\node[svc, fill=blue!10]    (fe)    at (1,   4) {\textbf{Next.js 14}\\\normalsize porta 3000};
+\node[svc, fill=green!12]   (api)   at (8,   4) {\textbf{FastAPI}\\\normalsize porta 8000};
+\node[svc, fill=orange!15]  (rw)    at (15,  4) {\textbf{R Worker}\\\normalsize LISTEN/NOTIFY};
+
+% ─── Linha 2 — Dados (y = 1) ─────────────────────────────────
+\node[svc, fill=gray!15]    (pg)    at (1,   1) {\textbf{PostgreSQL 16}\\\normalsize porta 5432\\{\footnotesize SQL + Large Objects}};
+\node[svc, fill=yellow!18]  (els)   at (8,   1) {\textbf{Elasticsearch 8}\\\normalsize porta 9200};
+\node[svc, fill=violet!10]  (prom)  at (15,  1) {\textbf{Prometheus}\\\normalsize porta 9090};
+
+% ─── Borda cluster k3s ────────────────────────────────────────
+\node[grp,
+  fit=(fe)(api)(rw)(pg)(els)(prom),
+  label={[font=\large\itshape, yshift=4pt]above:%
+    Cluster k3s \textnormal{(5 nós AMD)}}
+] (cluster) {};
+
+% ─── Setas externas → cluster ─────────────────────────────────
+\draw[arr] (browser) -- node[lbl, above]{HTTPS / WSS} (fe);
+\draw[arr] (fe)      to[bend right=30] node[lbl, left]{OAuth2}   (goauth);
+\draw[arr] (api)     to[bend right=10] node[lbl, left]{userinfo} (goauth);
+
+% ─── Setas aplicação ──────────────────────────────────────────
+\draw[arr] (fe)  -- node[lbl, above]{HTTP}    (api);
+\draw[arr] (api) -- node[lbl, right]{asyncpg} (pg);
+\draw[arr] (api) -- node[lbl, above]{HTTP}    (els);
+
+% ─── Setas R Worker → dados ───────────────────────────────────
+\draw[arr] (rw) -- node[lbl, right]{LISTEN}      (pg);
+\draw[arr] (rw) -- node[lbl, right]{LO read/write}(pg);
+\draw[arr] (rw) -- node[lbl, above]{index}       (els);
+
+% ─── Observabilidade ──────────────────────────────────────────
+\draw[arr] (api) -- node[lbl, above]{métricas} (prom);
+\draw[arr] (rw)  to[bend left=15] node[lbl, right]{métricas} (prom);
+
+\end{tikzpicture}%
+}% fim \resizebox
+\caption{Diagrama de implantação da \textit{Rizoma} no cluster k3s.}
+\fonte{O autor (2026).}
+\label{fig:deployment}
+\end{figure}

@@ -1,0 +1,363 @@
+\chapter{Materiais e Métodos}
+\label{cap:metodos}
+
+\section{Visão Geral da Arquitetura}
+
+A \textit{Rizoma} foi concebida segundo o estilo arquitetural de
+microsserviços, com responsabilidades distribuídas entre cinco
+componentes principais: o servidor de API (FastAPI), o Worker de
+análises (R), o banco de dados transacional (PostgreSQL~16), o motor
+de busca analítica (Elasticsearch~8) e o frontend (Next.js~14). A
+Figura~\ref{fig:arquitetura} ilustra a topologia geral e o fluxo de
+dados entre os componentes.
+
+% \begin{figure}[H]
+%   \centering
+%   \includegraphics[width=0.9\textwidth]{img/arquitetura.pdf}
+%   \caption{Arquitetura geral da \textit{Rizoma}.}
+%   \fonte{O autor (2026).}
+%   \label{fig:arquitetura}
+% \end{figure}
+
+A decisão de não incluir Redis ou outro \textit{broker} de mensagens
+externo foi deliberada: a fila de jobs é implementada diretamente no
+PostgreSQL via \texttt{LISTEN/NOTIFY}, com \texttt{FOR UPDATE SKIP
+LOCKED} garantindo exclusividade de consumo sem concorrência entre
+workers. Essa abordagem reduz a superfície operacional e mantém o
+PostgreSQL como única fonte da verdade para o estado dos jobs.
+
+\section{Infraestrutura e Ambiente de Implantação}
+
+A plataforma é implantada em um cluster Kubernetes leve (k3s) composto
+por cinco nós com processadores AMD. O k3s foi escolhido por sua
+pegada reduzida em comparação ao Kubernetes padrão, sem abrir mão da
+compatibilidade com a API oficial, essencial para manutenção futura.
+
+Em ambiente de desenvolvimento local, os serviços de backend — PostgreSQL,
+Elasticsearch, API e R Worker — são orquestrados via
+\texttt{docker-compose}. O frontend Next.js é executado separadamente
+com \texttt{npm run dev} na porta 3000.
+
+\subsection{Pipeline de Entrega Contínua}
+\label{sec:cicd}
+
+A entrega contínua da plataforma é realizada por um pipeline
+\textit{GitHub Actions} que constrói quatro imagens Docker
+(\texttt{api}, \texttt{r-worker}, \texttt{postgres}, \texttt{frontend})
+e as publica no \textit{GitHub Container Registry} (GHCR). Ao concluir
+os builds, um job \texttt{deploy} aciona o webhook do Coolify — uma
+plataforma de PaaS auto-hospedada — que puxa as imagens \texttt{:latest}
+e recria os contêineres no cluster sem exigir acesso SSH direto ao
+servidor de produção. Os domínios de produção são
+\texttt{bioapi.flipafile.com} (API) e \texttt{bio.flipafile.com}
+(frontend), com TLS gerenciado automaticamente via Let's Encrypt.
+
+A integração entre os dois repositórios (\texttt{bio-platform} e
+\texttt{bio-frontend}) é resolvida dentro do workflow: o job
+\texttt{frontend} executa uma segunda ação \texttt{actions/checkout}
+para clonar \texttt{bio-frontend} antes do \texttt{docker build},
+mantendo o contexto de construção inalterado e sem duplicar pipelines
+entre repositórios.
+
+\section{Banco de Dados}
+
+\subsection{Modelo de Dados}
+
+O esquema relacional foi construído incrementalmente por meio de cinco
+arquivos de migração SQL, aplicados pelo entrypoint do container
+PostgreSQL em ordem lexicográfica. As tabelas principais são
+descritas no Quadro~\ref{qd:tabelas}.
+
+\begin{table}[H]
+\centering
+\caption{Principais entidades do modelo relacional.}
+\label{qd:tabelas}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Entidade} & \textbf{Descrição} \\
+\midrule
+\texttt{projects}         & Projetos científicos (INOVAHERB, Pós-Fogo, Biorremediação), com código único, tipo de marcador (16S ou ITS), status e referência ao usuário criador (\texttt{created\_by}). \\
+\texttt{project\_analyses}& Configuração de quais análises e gráficos estão habilitados por projeto. \\
+\texttt{samples}          & Amostras FASTQ associadas a projetos, com grupo de tratamento, réplica e OIDs dos Large Objects das leituras R1/R2. \\
+\texttt{pipeline\_jobs}   & Fila de jobs com status (\texttt{queued}, \texttt{running}, \texttt{done}, \texttt{failed}), payload JSONB e timestamps. \\
+\texttt{analysis\_results}& Resultados analíticos em formato JSONB, produzidos pelo R Worker. \\
+\texttt{network\_edges}   & Arestas de redes microbianas com pesos e \textit{keystone score}. \\
+\texttt{users}            & Usuários autenticados, com role (\texttt{researcher} ou \texttt{admin}) e URL do avatar Google (\texttt{avatar\_url}), atualizada a cada login. \\
+\texttt{invited\_users}   & Convites de acesso com controle de uso (\texttt{used\_at}). \\
+\bottomrule
+\end{tabularx}
+\fonte{O autor (2026).}
+\end{table}
+
+\subsection{Fila de Jobs via PostgreSQL}
+
+Um gatilho (\textit{trigger}) na tabela \texttt{pipeline\_jobs} emite
+uma notificação via \texttt{pg\_notify('new\_job', id)} sempre que um
+novo job é inserido com status \texttt{'queued'}. O R Worker mantém
+uma conexão persistente ao banco e aguarda notificações com
+\texttt{postgresWaitForNotify(timeout = 30s)}. Ao receber o sinal,
+executa \texttt{SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1} para
+adquirir o próximo job sem race condition, atualiza o status para
+\texttt{'running'} e processa a análise.
+
+\section{API REST}
+
+\subsection{Framework e Organização}
+
+A API foi desenvolvida com FastAPI, framework Python assíncrono
+baseado em Starlette e Pydantic~v2. A organização segue o padrão
+CQRS: routers de comando (\textit{mutations}) e consulta
+(\textit{queries}) são mantidos separados, com a leitura de dados
+analíticos servida preferencialmente pelo Elasticsearch, e a escrita
+sempre confirmada primeiro no PostgreSQL.
+
+A Tabela~\ref{tab:endpoints} lista os principais endpoints públicos
+e autenticados.
+
+\begin{table}[H]
+\centering
+\caption{Endpoints principais da API v1.}
+\label{tab:endpoints}
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Método} & \textbf{Caminho} & \textbf{Descrição} \\
+\midrule
+GET  & \texttt{/api/v1/projects/}              & Lista projetos com análises configuradas \\
+GET  & \texttt{/api/v1/samples/\{project\_id\}} & Lista amostras de um projeto \\
+POST & \texttt{/api/v1/samples/upload-pair}     & Upload multipart R1+R2 direto na API; grava como Large Objects \\
+POST & \texttt{/api/v1/jobs/enqueue}            & Enfileira análise no pipeline \\
+GET  & \texttt{/api/v1/jobs/\{project\_id\}}    & Lista jobs e status \\
+WS   & \texttt{/api/v1/jobs/ws/status}          & Feed WebSocket de atualizações em tempo real \\
+GET  & \texttt{/api/v1/analysis/\{job\_id\}/results} & Resultados JSON de um job \\
+POST & \texttt{/api/v1/samples/import-sra}       & Importa par FASTQ de repositório externo (NCBI SRA ou GEO) \\
+GET  & \texttt{/api/v1/samples/sra-preview}     & Retorna metadados de um \textit{accession} sem download \\
+GET  & \texttt{/api/v1/samples/fastq-sources}   & Lista repositórios externos disponíveis \\
+POST & \texttt{/api/v1/auth/google}             & Troca \textit{access\_token} Google por JWT \\
+GET  & \texttt{/api/v1/auth/me}                 & Dados do usuário autenticado \\
+\bottomrule
+\end{tabularx}
+\fonte{O autor (2026).}
+\end{table}
+
+\subsection{Importação de Dados Externos — NCBI SRA e GEO}
+\label{sec:ncbi}
+
+Para projetos cujas amostras já estão depositadas em repositórios
+públicos, a plataforma implementa uma camada de importação baseada no
+padrão de \textit{Porta e Adaptador} (Arquitetura Hexagonal)
+\cite{cockburn2005hexagonal}. Um protocolo Python (\texttt{FastqSource})
+define o contrato que qualquer repositório externo deve cumprir —
+dois métodos assíncronos: \texttt{fetch\_metadata} e
+\texttt{download\_pair}. Adapters concretos (\texttt{SraAdapter} e
+\texttt{GeoAdapter}) implementam esse protocolo para o NCBI SRA/ENA
+e para o NCBI GEO, respectivamente, sem que o router da API precise
+conhecer qual repositório está sendo acessado.
+
+O \texttt{SraAdapter} consulta a API eUtils do NCBI para obter
+metadados do experimento (organismo, \textit{layout} de leitura,
+tamanho estimado) e usa a portal ENA para recuperar as URLs de download
+dos arquivos FASTQ. O \texttt{GeoAdapter} resolve números de acesso
+GSM para identificadores SRR via a relação eLink do NCBI, delegando
+então o download ao \texttt{SraAdapter}. Ambos respeitam o limite de
+requisições da API pública (0,35 s entre chamadas consecutivas).
+
+Novos repositórios — \textit{ArrayExpress}, bases locais, etc. — podem
+ser adicionados ao registro sem alteração do endpoint
+\texttt{/import-sra}, pois o registro é carregado de forma
+\textit{lazy} em \texttt{app/core/ports.py}.
+
+\subsection{Autenticação}
+
+A autenticação é realizada em duas camadas. No frontend, o NextAuth v5
+gerencia o fluxo OAuth2 com o Google, restringindo o acesso ao domínio
+\texttt{@ufvjm.edu.br}. O \textit{access\_token} obtido é enviado ao
+backend, que o valida consultando o endpoint
+\texttt{/oauth2/v3/userinfo} da API do Google e verifica o campo
+\texttt{email\_verified}. Em seguida, emite um JWT HS256 com expiração
+de 60 minutos contendo os campos \texttt{sub} (UUID do usuário),
+\texttt{role} e \texttt{exp}.
+
+O primeiro usuário a fazer login com a tabela \texttt{users} vazia
+recebe automaticamente o papel \texttt{admin}. Os demais precisam de
+convite prévio cadastrado na tabela \texttt{invited\_users}.
+
+A URL da foto de perfil fornecida pelo Google (\texttt{picture} no
+\textit{userinfo}) é persistida em \texttt{users.avatar\_url} a cada
+upsert de login. O campo é propagado até o frontend via sessão
+NextAuth e exibido no painel lateral do usuário e nos cartões de
+projeto, permitindo identificar visualmente o autor de cada projeto.
+
+\section{R Worker}
+
+\subsection{Estrutura do Worker}
+
+O R Worker é um processo R independente que executa um loop de
+consumo de mensagens conforme o fluxo apresentado no
+Algoritmo~\ref{alg:worker}.
+
+\begin{figure}[H]
+\centering
+\begin{lstlisting}[language=R, caption={Loop principal do R Worker.}, label={alg:worker}]
+repeat {
+  notify <- postgresWaitForNotify(conn, timeout = 30)
+  if (!is.null(notify)) {
+    job <- claim_next_job(conn)   # FOR UPDATE SKIP LOCKED
+    if (!is.null(job)) {
+      tryCatch(
+        process_job(conn, job),
+        error = function(e) mark_failed(conn, job$id, e$message)
+      )
+    }
+  }
+}
+\end{lstlisting}
+\fonte{O autor (2026).}
+\end{figure}
+
+\subsection{Análises Implementadas}
+
+O dispatcher mapeia o campo \texttt{job\_type} do payload para a
+função de análise correspondente. Todos os jobs (exceto FUNGuild em
+modo online e GSEA) exigem o campo \texttt{payload\$phyloseq\_key},
+que identifica o Large Object \texttt{.rds} no PostgreSQL (campo \texttt{phyloseq\_oid}). O Quadro~\ref{qd:analises}
+resume as análises disponíveis.
+
+\begin{table}[H]
+\centering
+\caption{Análises implementadas no R Worker.}
+\label{qd:analises}
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Job type} & \textbf{Marcador} & \textbf{Output} \\
+\midrule
+\texttt{deseq2}      & 16S/ITS & Tabela de DEGs → \texttt{analysis\_results} \\
+\texttt{ancombc2}    & ITS     & Táxons diferenciais → \texttt{analysis\_results} \\
+\texttt{maaslin2}    & 16S     & Coeficientes de associação → \texttt{analysis\_results} \\
+\texttt{spieceasi}   & 16S/ITS & Rede nós+arestas → \texttt{analysis\_results} + \texttt{network\_edges} \\
+\texttt{random\_forest} & 16S/ITS & Modelo \texttt{.rds} → PG Large Object (\texttt{result\_oid}); importância → \texttt{analysis\_results} \\
+\texttt{gsea}        & 16S/ITS & Pathways GO/KEGG → \texttt{analysis\_results}; suporte a 8 organismos via \texttt{ORG\_DB\_MAP} e \texttt{KEGG\_ORG\_MAP} \\
+\texttt{funguild}    & ITS     & Anotações de guilda → \texttt{analysis\_results} \\
+\texttt{picrust2}    & 16S     & Predição de vias metabólicas → \texttt{analysis\_results} \\
+\bottomrule
+\end{tabularx}
+\fonte{O autor (2026).}
+\end{table}
+
+Uma decisão arquitetural fundamental é que o R Worker \textbf{nunca
+gera figuras}: todo output é dados estruturados (CSV transformado em
+JSONB ou JSON de redes). As visualizações são geradas exclusivamente
+no frontend via Plotly.js e Cytoscape.js, o que facilita a
+customização interativa pelo usuário e elimina dependências de pacotes
+gráficos (\texttt{ggplot2}, \texttt{Cairo}) no ambiente R.
+
+\section{Frontend}
+
+\subsection{Stack e Roteamento}
+
+O frontend é construído com Next.js~14 utilizando o App Router e
+Server Components onde aplicável. A biblioteca SWR provê cache de
+dados com revalidação automática. As principais rotas estão listadas
+no Quadro~\ref{qd:rotas}.
+
+\begin{table}[H]
+\centering
+\caption{Rotas do frontend.}
+\label{qd:rotas}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Rota} & \textbf{Descrição} \\
+\midrule
+\texttt{/}                    & Dashboard com cards de projetos e métricas \\
+\texttt{/projects/[id]}       & Upload FASTQ, upload \texttt{.rds}, enfileiramento de jobs \\
+\texttt{/jobs}                & Feed em tempo real via WebSocket \\
+\texttt{/diversity}           & PCoA e diversidade alfa (Plotly.js) \\
+\texttt{/cross-project}       & Painel com 6 PCoAs (Plotly subplots) \\
+\texttt{/analysis/[id]}       & Resultados detalhados por job \\
+\texttt{/network/[id]}        & Rede microbiana interativa (Cytoscape.js) \\
+\texttt{/admin/users}         & Gestão de usuários e convites \\
+\texttt{/admin/projects/new}  & Formulário de criação de projeto (admin) \\
+\texttt{/docs}                & Documentação interativa da API (Swagger UI) \\
+\bottomrule
+\end{tabularx}
+\fonte{O autor (2026).}
+\end{table}
+
+\subsection{Documentação Interativa da API}
+
+A rota \texttt{/docs} do frontend incorpora o
+\textit{Swagger UI}\footnote{swagger-ui-react v5, renderizado inteiramente
+no cliente via \texttt{next/dynamic} com \texttt{ssr: false}.},
+que consome o endpoint \texttt{/openapi.json} servido nativamente
+pelo FastAPI. Isso disponibiliza a documentação dos endpoints —
+parâmetros, schemas Pydantic, códigos de resposta — diretamente na
+interface da plataforma, sem necessidade de acesso externo ao servidor
+de API.
+
+\subsection{Visualizações}
+
+Os dados retornados pela API são renderizados por componentes
+Plotly.js (gráficos 2D/3D: PCoA, volcano plot, MA plot, heatmap,
+\textit{dot plot}, barras de importância) e Cytoscape.js (rede
+microbiana). A página \texttt{/cross-project} utiliza subplots
+Plotly para compor o painel de 6 PCoAs que constitui a figura central
+do TCC.
+
+\section{Armazenamento de Arquivos — PostgreSQL Large Objects}
+
+Os arquivos binários da plataforma — FASTQs comprimidos, objetos
+\texttt{.rds} do phyloseq e relatórios de QC — são armazenados
+diretamente no PostgreSQL 16 por meio do mecanismo de \textit{Large
+Objects} (LO). Cada arquivo é inserido via \texttt{lo\_import} ou
+pela interface de \textit{streaming} do \texttt{asyncpg}, gerando um
+OID referenciado nas tabelas \texttt{samples} e
+\texttt{pipeline\_jobs}. O Quadro~\ref{qd:lo} descreve a organização
+lógica dos dados binários.
+
+\begin{table}[H]
+\centering
+\caption{Categorias de dados binários armazenados como Large Objects.}
+\label{qd:lo}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Categoria} & \textbf{Descrição} \\
+\midrule
+FASTQs brutos (R1/R2) & Leituras brutas do sequenciador, referenciadas em \texttt{samples.fastq\_r1\_oid} e \texttt{fastq\_r2\_oid} \\
+Phyloseq \texttt{.rds}  & Objeto R serializado após pipeline QIIME2, referenciado em \texttt{pipeline\_jobs.payload} \\
+Relatórios QC           & FastQC/MultiQC em HTML, vinculados ao projeto \\
+Bases de referência     & SILVA 138 e UNITE v10 para classificação taxonômica \\
+\bottomrule
+\end{tabularx}
+\fonte{O autor (2026).}
+\end{table}
+
+Essa abordagem centraliza backup, replicação e controle de acesso
+em um único serviço, simplificando a operação do cluster. O acesso
+transacional garante que um arquivo nunca fique visível ao R Worker
+antes da confirmação do registro correspondente, evitando condições
+de corrida inerentes ao uso de storage externo.
+
+\section{Projetos Científicos Suportados}
+
+\subsection{INOVAHERB}
+
+Projeto de análise fatorial do micobioma (marcador ITS) de plantas
+medicinais. As amostras seguem a nomenclatura Illumina no formato
+\texttt{ITSA\_<num>\_<tratamento>\_L001\_R1\_001.fastq.gz}, onde o
+grupo de tratamento segue o padrão \texttt{T\{n\}B\{n\}}. A análise
+principal é ANCOM-BC2, com SpiecEasi para inferência de rede.
+
+\subsection{Pós-Fogo}
+
+Monitoramento longitudinal da microbiota bacteriana (16S) em solos
+após eventos de queimada. O design experimental é de série temporal,
+com coletas em múltiplos pontos pós-fogo. MaAsLin2 é empregado para
+modelar as associações entre abundância de táxons, tempo e variáveis
+edáficas. PICRUSt2 é usado para predição funcional.
+
+\subsection{Biorremediação}
+
+Correlação de comunidades fúngicas e bacterianas (ITS + 16S) com
+concentrações de metais pesados em solos contaminados. FUNGuild
+anota as guildas ecológicas dos fungos identificados; Random Forest
+seleciona os táxons preditores mais relevantes; ANCOM-BC2 quantifica
+as abundâncias diferenciais entre áreas contaminadas e controle.

@@ -1,0 +1,34 @@
+\begin{resumo}[Abstract]
+\begin{otherlanguage*}{english}
+
+Computational microbiome analysis requires integrating multiple
+statistical tools, heterogeneous data formats, and complex
+bioinformatic pipelines --- a scenario that hinders researchers
+without a programming background. This work describes the design and
+implementation of an academic web platform for integrated mycobiome
+and metataxonomic analysis, developed to support three parallel
+scientific projects: \textbf{INOVAHERB} (factorial ITS mycobiome
+analysis via ANCOM-BC2), \textbf{Pós-Fogo} (16S post-fire soil
+recovery time series via MaAsLin2), and \textbf{Biorremediação}
+(microbiota correlation with edaphic variables). The architecture
+adopts a microservices approach: a FastAPI (Python) backend exposing
+a CQRS REST API, an asynchronous R Worker executing heavy statistical
+analyses (DESeq2, ANCOM-BC2, MaAsLin2, SpiecEasi, Random Forest,
+GSEA, FUNGuild, and PICRUSt2), a Next.js 14 frontend with interactive
+visualisations via Plotly.js and Cytoscape.js, and a data layer
+comprising PostgreSQL~16 (including Large Objects for binary storage) and Elasticsearch~8. Job scheduling
+is handled through native PostgreSQL queues (\texttt{LISTEN/NOTIFY}
+with \texttt{FOR UPDATE SKIP LOCKED}), without relying on external
+message brokers. The platform is deployed on a lightweight Kubernetes
+cluster (k3s) with five AMD nodes and supports institutional
+authentication via Google OAuth restricted to the
+\texttt{@ufvjm.edu.br} domain. Expected outcomes include a unified
+dashboard with six PCoA plots, two per project, produced as the
+central figure of the thesis upon completion of all three pipelines.
+
+\vspace{\onelineskip}
+\noindent
+\textbf{Keywords}: bioinformatics; mycobiome; metataxonomics; web platform; FastAPI; R Worker; PostgreSQL; QIIME2.
+
+\end{otherlanguage*}
+\end{resumo}

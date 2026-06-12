@@ -1,0 +1,37 @@
+name: Build PDF
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile LaTeX
+        uses: xu-cheng/latex-action@v3
+        with:
+          root_file: main.tex
+          latexmk_use_xelatex: false
+          latexmk_shell_escape: true
+          extra_system_packages: >-
+            py3-pygments
+          extra_packages: >-
+            texlive-lang-portuguese
+            texlive-fonts-recommended
+            texlive-fonts-extra
+            texlive-bibtex-extra
+            texlive-science
+            texlive-pictures
+
+      - name: Upload PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: tcc-murilo-${{ github.sha }}
+          path: main.pdf
+          retention-days: 30

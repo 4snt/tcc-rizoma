@@ -1,0 +1,56 @@
+\chapter{Resultados e Discussão}
+\label{cap:resultados}
+
+% ─── TODO: preencher conforme os pipelines forem concluídos ──────────────────
+
+\section{Plataforma Implementada}
+
+% Descrever a interface, capturas de tela dos componentes principais.
+% Incluir figuras das páginas: dashboard, upload, jobs, PCoA, rede.
+
+\section{Pipeline INOVAHERB}
+
+% Resultados ANCOM-BC2: táxons diferenciais entre tratamentos fatoriais.
+% PCoA 1 e PCoA 2 do projeto.
+% Rede SpiecEasi: keystone taxa identificados.
+
+\section{Pipeline Pós-Fogo}
+
+% Resultados MaAsLin2: coeficientes de associação por ponto temporal.
+% PCoA 3 e PCoA 4 do projeto.
+% Predição funcional PICRUSt2.
+
+\section{Pipeline Biorremediação}
+
+% Resultados ANCOM-BC2 (ITS) + FUNGuild: distribuição de guildas.
+% Random Forest: variáveis edáficas mais preditivas.
+% PCoA 5 e PCoA 6 do projeto.
+
+\section{Painel Unificado de PCoAs}
+
+O painel de seis PCoAs — evento \texttt{CrossProjectFigureReady} da
+plataforma — é gerado automaticamente quando os três projetos atingem
+o status \texttt{done} em suas análises primárias. A
+Figura~\ref{fig:cross_project} apresenta o resultado.
+
+% \begin{figure}[H]
+%   \centering
+%   \includegraphics[width=\textwidth]{img/cross_project_pcoa.pdf}
+%   \caption{Painel unificado com seis PCoAs (duas por projeto):
+%            INOVAHERB (a, b), Pós-Fogo (c, d) e Biorremediação (e, f).}
+%   \fonte{O autor (2026).}
+%   \label{fig:cross_project}
+% \end{figure}
+
+\section{Desempenho dos Pipelines}
+
+% Tabela com tempos médios de execução por análise, comparar com estimativas
+% do CLAUDE.md (DESeq2: 4–5 min; ANCOM-BC2: 6–8 min; SpiecEasi: 10–20 min...).
+
+\section{Discussão}
+
+% Discutir limitações conhecidas:
+% - GSEA hardcoded para org.Hs.eg.db
+% - FUNGuild depende de conexão externa
+% - Worker single-threaded (jobs longos bloqueiam fila)
+% - WebSocket ainda não conectado ao NOTIFY do PG

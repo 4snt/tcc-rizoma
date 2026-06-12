@@ -1,0 +1,161 @@
+% ============================================================
+%  STACK TECNOLÓGICO — figuras + justificativas
+%  \input{Stack} em MateriaisEMetodos, seção 2.X
+% ============================================================
+
+\section{Escolhas Tecnológicas}
+\label{sec:stack}
+
+A seleção das tecnologias que compõem a \textit{Rizoma} seguiu
+três critérios: adequação ao perfil de carga (análises estatísticas
+longas, volumes de dados genômicos), maturidade do ecossistema e
+minimização de dependências operacionais. A
+Figura~\ref{fig:stack} apresenta o conjunto de tecnologias adotadas.
+
+% ── Figura do stack ──────────────────────────────────────────────────────────
+\begin{figure}[H]
+\centering
+
+% Grid 2×4
+\begin{tabular}{cccc}
+
+  \begin{minipage}{3.2cm}\centering
+    \includegraphics[width=2.4cm]{img/stack/nextjs_dev.png}\\[4pt]
+    {\small\bfseries Next.js 14}
+  \end{minipage}
+  &
+  \begin{minipage}{3.2cm}\centering
+    \includegraphics[width=2.4cm]{img/stack/fastapi_dev.png}\\[4pt]
+    {\small\bfseries FastAPI}
+  \end{minipage}
+  &
+  \begin{minipage}{3.2cm}\centering
+    \includegraphics[width=2.4cm]{img/stack/r_dev.png}\\[4pt]
+    {\small\bfseries R Worker}
+  \end{minipage}
+  &
+  \begin{minipage}{3.2cm}\centering
+    \includegraphics[width=2.4cm]{img/stack/postgresql_dev.png}\\[4pt]
+    {\small\bfseries PostgreSQL 16}
+  \end{minipage}
+
+\\[20pt]
+
+  \begin{minipage}{3.2cm}\centering
+    \includegraphics[width=2.4cm]{img/stack/elasticsearch_dev.png}\\[4pt]
+    {\small\bfseries Elasticsearch 8}
+  \end{minipage}
+  &
+  \begin{minipage}{3.2cm}\centering
+    \includegraphics[width=2.4cm]{img/stack/kubernetes_dev.png}\\[4pt]
+    {\small\bfseries k3s / Kubernetes}
+  \end{minipage}
+  &
+  \begin{minipage}{3.2cm}\centering
+    \includegraphics[width=2.4cm]{img/stack/docker_dev.png}\\[4pt]
+    {\small\bfseries Docker}
+  \end{minipage}
+  &
+  \begin{minipage}{3.2cm}\centering
+    \includegraphics[width=2.4cm]{img/stack/prometheus_dev.png}\\[4pt]
+    {\small\bfseries Prometheus}
+  \end{minipage}
+
+\end{tabular}
+
+\caption{Stack tecnológico da \textit{Rizoma}.}
+\fonte{Logos oficiais de cada projeto. Composição do autor (2026).}
+\label{fig:stack}
+\end{figure}
+
+% ── Justificativas ───────────────────────────────────────────────────────────
+
+\subsection{Frontend — Next.js 14}
+
+O Next.js 14 foi escolhido pelo suporte nativo ao App Router, que
+permite compor páginas com Server Components para reduzir o JavaScript
+enviado ao cliente, e pelo ecossistema React que disponibiliza
+bibliotecas de visualização científica maduras como Plotly.js e
+Cytoscape.js. A estratégia de \textit{data fetching} via SWR
+(\textit{Stale-While-Revalidate}) oferece cache automático com
+revalidação em segundo plano, adequado às consultas frequentes de
+status de jobs e listagem de projetos \cite{vercel2023nextjs}.
+
+\subsection{API — FastAPI}
+
+O FastAPI foi adotado por três razões centrais. Primeiro, sua base
+assíncrona nativa (\texttt{async/await} sobre Starlette e
+\texttt{asyncpg}) permite que o servidor mantenha centenas de conexões
+simultâneas sem bloquear \textit{threads}, essencial dado que as
+análises R podem levar entre 4 e 20 minutos por job. Segundo, a
+validação automática de payloads via Pydantic v2 reduz código de
+tratamento de erros nos routers. Terceiro, a geração automática de
+documentação OpenAPI facilita a colaboração com pesquisadores de
+biologia que precisam entender os endpoints disponíveis
+\cite{fastapi2023docs}.
+
+\subsection{R Worker}
+
+O R permanece o ambiente estatístico de referência em bioinformática,
+sendo o único suportado pelos pacotes DESeq2, ANCOM-BC2, MaAsLin2 e
+SpiecEasi via Bioconductor \cite{huber2015orchestrating}. A decisão de
+isolar o R em um processo separado — em vez de chamá-lo via
+\texttt{subprocess} dentro do FastAPI — evita que análises longas
+bloqueiem o servidor de API e permite escalar o worker de forma
+independente. A comunicação entre os componentes ocorre exclusivamente
+via banco de dados, sem acoplamento direto.
+
+\subsection{Banco de dados principal — PostgreSQL 16}
+
+O PostgreSQL foi selecionado por reunir, em um único sistema, as
+funcionalidades necessárias para a plataforma: transações ACID para
+consistência da fila de jobs, suporte nativo a JSONB para armazenar
+resultados analíticos sem schema fixo, e o mecanismo
+\texttt{LISTEN/NOTIFY} que elimina a necessidade de um \textit{broker}
+de mensagens externo como Redis ou RabbitMQ. A opção por usar
+\texttt{SELECT ... FOR UPDATE SKIP LOCKED} como primitiva de fila
+foi validada por \citeonline{brandl2021postgresql} como abordagem
+robusta para cargas de dezenas a centenas de jobs diários.
+
+\subsection{Busca e \textit{analytics} — Elasticsearch 8}
+
+O Elasticsearch complementa o PostgreSQL no padrão CQRS: enquanto o
+PG é a fonte da verdade para escritas, o ES serve leituras analíticas
+que exigem agregações complexas sobre resultados de DEGs,
+\textit{keystone taxa} e correlações edáficas. A indexação assíncrona
+após confirmação no PG garante consistência eventual sem impacto na
+latência das operações de escrita \cite{elastic2023docs}.
+
+\subsection{Armazenamento de arquivos — PostgreSQL Large Objects}
+
+O armazenamento dos arquivos FASTQ comprimidos e dos objetos
+\texttt{.rds} do phyloseq é realizado diretamente no PostgreSQL por
+meio do mecanismo de \textit{Large Objects} (LO), que permite
+armazenar dados binários de tamanho arbitrário referenciados por um
+OID (\textit{Object Identifier}) e acessados via interface de
+\textit{streaming} \cite{postgresql2023docs}. Essa decisão elimina a
+dependência de um serviço de object-storage externo como MinIO ou S3,
+reduzindo a superfície operacional do cluster e centralizando
+\textit{backup}, replicação e controle de acesso em um único sistema.
+O acesso transacional garante que um arquivo nunca fique visível para
+o R Worker antes que o registro associado na tabela \texttt{samples}
+ou \texttt{pipeline\_jobs} seja confirmado, evitando condições de
+corrida que seriam mais difíceis de tratar com storage externo.
+
+\subsection{Orquestração — k3s e Docker}
+
+O k3s é uma distribuição certificada e leve do Kubernetes, com
+consumo de memória cerca de 50\% menor que o Kubernetes padrão,
+adequado ao cluster de cinco nós AMD disponível no laboratório. O
+Docker provê a camada de containerização, garantindo reprodutibilidade
+do ambiente R (versões de pacotes Bioconductor fixadas) e portabilidade
+entre desenvolvimento local e produção \cite{kubernetes2022}.
+
+\subsection{Monitoramento — Prometheus}
+
+O Prometheus coleta métricas de todos os serviços via
+\textit{scraping} HTTP, armazenando séries temporais de uso de CPU,
+memória e duração dos jobs no cluster k3s. Isso permite identificar
+gargalos nas análises mais longas (SpiecEasi: 10--20 min; Random
+Forest: 10--15 min) e dimensionar recursos de forma orientada a dados
+\cite{prometheus2023docs}.

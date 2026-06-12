@@ -1,0 +1,41 @@
+\chapter{Conclusão}
+\label{cap:conclusao}
+
+% ─── TODO: escrever após conclusão dos resultados ─────────────────────────────
+
+Este trabalho apresentou o projeto e a implementação da
+\textit{Rizoma}, uma plataforma web acadêmica para análise
+integrada de micobioma e metataxonômica, desenvolvida para suportar
+três projetos científicos ativos na UFVJM: INOVAHERB, Pós-Fogo e
+Biorremediação.
+
+% Principais contribuições:
+% - Arquitetura sem Redis (PG LISTEN/NOTIFY)
+% - R Worker desacoplado com output 100% estruturado
+% - Autenticação institucional Google OAuth
+% - Painel unificado de 6 PCoAs como produto científico
+
+\section{Limitações}
+
+% Listar as limitações identificadas (tech debt do CLAUDE.md):
+% - WebSocket não conectado ao NOTIFY
+% - GSEA hardcoded para org.Hs.eg.db
+% - Worker single-threaded
+% - CORS restrito a localhost:3000
+
+\section{Trabalhos Futuros}
+
+\begin{itemize}
+  \item Integrar o WebSocket \texttt{/jobs/ws/status} ao
+        \texttt{LISTEN/NOTIFY} do PostgreSQL para atualizações em
+        tempo real sem \textit{polling}.
+  \item Parametrizar o banco de anotações do GSEA para suportar
+        outros organismos além de \textit{Homo sapiens}.
+  \item Implementar paralelismo no R Worker via processos filhos
+        para reduzir o bloqueio da fila em análises longas (SpiecEasi,
+        Random Forest).
+  \item Integrar o PICRUSt2 diretamente ao pipeline, eliminando
+        a dependência de arquivo local pré-gerado.
+  \item Publicar a plataforma em endereço acessível fora do campus
+        via configuração de CORS e exposição do Ingress k3s.
+\end{itemize}

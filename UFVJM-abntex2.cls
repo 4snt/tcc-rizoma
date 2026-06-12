@@ -1,0 +1,1 @@
+../../LaTeX-Pacote-UFVJM/UFVJM-abntex2.cls

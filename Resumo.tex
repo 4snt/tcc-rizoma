@@ -1,0 +1,33 @@
+\begin{resumo}
+
+A análise computacional de microbiomas requer a integração de múltiplas
+ferramentas estatísticas, formatos de dados heterogêneos e pipelines
+bioinformáticos complexos — um cenário que dificulta o trabalho de
+pesquisadores sem formação em programação. Este trabalho descreve o
+projeto e a implementação de uma plataforma web acadêmica voltada à
+análise integrada de micobioma e metataxonômica, desenvolvida para
+suportar três projetos científicos paralelos: \textbf{INOVAHERB}
+(análise fatorial de micobioma ITS com ANCOM-BC2), \textbf{Pós-Fogo}
+(série temporal de recuperação de solo via 16S com MaAsLin2) e
+\textbf{Biorremediação} (correlação de microbiota com variáveis
+edáficas). A arquitetura adotada baseia-se em microsserviços: um
+backend FastAPI (Python) expondo uma API REST com padrão CQRS, um R
+Worker assíncrono que executa as análises estatísticas pesadas
+(DESeq2, ANCOM-BC2, MaAsLin2, SpiecEasi, Random Forest, GSEA,
+FUNGuild e PICRUSt2), um frontend Next.js 14 com visualizações
+interativas via Plotly.js e Cytoscape.js, e uma camada de dados
+composta por PostgreSQL 16 (incluindo Large Objects para armazenamento binário) e Elasticsearch 8. A orquestração
+de jobs é realizada por meio de filas nativas do PostgreSQL
+(\texttt{LISTEN/NOTIFY} com \texttt{FOR UPDATE SKIP LOCKED}), sem
+dependência de sistemas de mensageria externos. A plataforma é
+implantada em cluster Kubernetes leve (k3s) com cinco nós AMD e
+suporta autenticação institucional via Google OAuth restrita ao domínio
+\texttt{@ufvjm.edu.br}. Os resultados esperados incluem a entrega de um
+painel unificado com seis PCoAs, duas por projeto, gerado como figura
+central do TCC após a conclusão dos três pipelines.
+
+\vspace{\onelineskip}
+\noindent
+\textbf{Palavras-chave}: bioinformática; micobioma; metataxonômica; plataforma web; FastAPI; R Worker; PostgreSQL; QIIME2.
+
+\end{resumo}
